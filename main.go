@@ -30,6 +30,25 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+type SignUpRequestDTO struct {
+	Username string `json:"username" binding:"required,min=3,max=20"`
+	Password string `json:"password" binding:"required"`
+}
+
+type SignUpResponseDTO struct {
+	ID       uuid.UUID `json:"id"`
+	Username string    `json:"username"`
+}
+
+type SignInRequestDTO struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+type SignInResponseDTO struct {
+	Token string `json:"token"`
+}
+
 var db *sql.DB
 var jwtKey []byte
 
@@ -77,18 +96,18 @@ func main() {
 }
 
 func signup(c *gin.Context) {
-	var user User
-	if err := c.ShouldBindJSON(&user); err != nil {
+	var req SignUpRequestDTO
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if isUsernameTaken(user.Username) {
+	if isUsernameTaken(req.Username) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Username already taken"})
 		return
 	}
 
-	hashedPassword, err := hashPassword(user.Password)
+	hashedPassword, err := hashPassword(req.Password)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
 		return
@@ -100,26 +119,34 @@ func signup(c *gin.Context) {
 		return
 	}
 
-	user.ID = userID
-	user.Password = hashedPassword
+	user := User{
+		ID:       userID,
+		Username: req.Username,
+		Password: hashedPassword,
+	}
 
 	if err := insertUser(user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert user into database"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, user)
+	resp := SignUpResponseDTO{
+		ID:       user.ID,
+		Username: user.Username,
+	}
+
+	c.JSON(http.StatusCreated, resp)
 }
 
 func signin(c *gin.Context) {
-	var credentials Credentials
-	if err := c.ShouldBindJSON(&credentials); err != nil {
+	var req SignInRequestDTO
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	user, err := getUserByUsername(credentials.Username)
-	if err != nil || !verifyPassword(credentials.Password, user.Password) {
+	user, err := getUserByUsername(req.Username)
+	if err != nil || !verifyPassword(req.Password, user.Password) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
 		return
 	}
@@ -130,7 +157,11 @@ func signin(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": token})
+	resp := SignInResponseDTO{
+		Token: token,
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 func hashPassword(password string) (string, error) {
