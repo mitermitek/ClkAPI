@@ -95,6 +95,11 @@ func initializeApp() error {
 		return err
 	}
 
+	env := os.Getenv("ENV")
+	if env == "" {
+		return fmt.Errorf("ENV is not set")
+	}
+
 	jwtKey = []byte(os.Getenv("JWT_KEY"))
 	if string(jwtKey) == "" {
 		return fmt.Errorf("JWT_KEY is not set")
@@ -120,6 +125,11 @@ func initializeApp() error {
 	db.SetMaxIdleConns(10)
 
 	log.Println("Database connection initialized successfully")
+
+	if (env == "prod") {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	return nil
 }
 
