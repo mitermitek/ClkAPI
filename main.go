@@ -41,8 +41,7 @@ type UserRegistrationDTO struct {
 }
 
 type UserRegisteredDTO struct {
-	ID       uuid.UUID `json:"id"`
-	Username string    `json:"username"`
+	Username string `json:"username"`
 }
 
 type UserLoginDTO struct {
@@ -160,7 +159,6 @@ func signup(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, UserRegisteredDTO{
-		ID:       user.ID,
 		Username: user.Username,
 	})
 }
