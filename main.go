@@ -111,6 +111,8 @@ func main() {
 
 	r.POST("/urls", authMiddleware(), createShortURL)
 
+	r.GET("/:hashURL", redirectToOriginalURL)
+
 	r.Run()
 }
 
@@ -232,6 +234,19 @@ func createShortURL(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, resp)
+}
+
+func redirectToOriginalURL(c *gin.Context) {
+	hashURL := c.Param("hashURL")
+
+	var originalURL string
+	err := db.QueryRow("SELECT original_url FROM urls WHERE hash_url = ?", hashURL).Scan(&originalURL)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Short URL not found"})
+		return
+	}
+
+	c.Redirect(http.StatusFound, originalURL)
 }
 
 func hashPassword(password string) (string, error) {
