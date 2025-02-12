@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"database/sql"
+	"fmt"
 	"log"
 	"math/big"
 	"net/http"
@@ -70,35 +71,9 @@ const (
 )
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Failed to load .env file: %v", err)
+	if err := initializeApp(); err != nil {
+		log.Fatalf("Failed to initialize app: %v", err)
 	}
-
-	jwtKey = []byte(os.Getenv("JWT_KEY"))
-	if string(jwtKey) == "" {
-		log.Fatal("JWT_KEY is not set")
-	}
-
-	dbURL := os.Getenv("DB_URL")
-	if string(dbURL) == "" {
-		log.Fatal("DB_URL is not set")
-	}
-
-	db, err = sql.Open("mysql", dbURL)
-	if err != nil {
-		log.Fatalf("Failed to connect to the database: %v", err)
-	}
-
-	if err := db.Ping(); err != nil {
-		log.Fatalf("Failed to ping the database: %v", err)
-	}
-
-	db.SetConnMaxLifetime(time.Minute * 3)
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(10)
-
-	log.Println("Database connection initialized successfully")
 
 	r := gin.Default()
 
@@ -114,6 +89,39 @@ func main() {
 	r.GET("/:hashURL", redirectToOriginalURL)
 
 	r.Run()
+}
+
+func initializeApp() error {
+	if err := godotenv.Load(); err != nil {
+		return err
+	}
+
+	jwtKey = []byte(os.Getenv("JWT_KEY"))
+	if string(jwtKey) == "" {
+		return fmt.Errorf("JWT_KEY is not set")
+	}
+
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		return fmt.Errorf("DB_URL is not set")
+	}
+
+	var err error
+	db, err = sql.Open("mysql", dbURL)
+	if err != nil {
+		return err
+	}
+
+	if err := db.Ping(); err != nil {
+		return err
+	}
+
+	db.SetConnMaxLifetime(time.Minute * 3)
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(10)
+
+	log.Println("Database connection initialized successfully")
+	return nil
 }
 
 func signup(c *gin.Context) {
@@ -151,12 +159,10 @@ func signup(c *gin.Context) {
 		return
 	}
 
-	resp := UserRegisteredDTO{
+	c.JSON(http.StatusCreated, UserRegisteredDTO{
 		ID:       user.ID,
 		Username: user.Username,
-	}
-
-	c.JSON(http.StatusCreated, resp)
+	})
 }
 
 func signin(c *gin.Context) {
@@ -178,11 +184,7 @@ func signin(c *gin.Context) {
 		return
 	}
 
-	resp := UserLoggedInDTO{
-		Token: token,
-	}
-
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, UserLoggedInDTO{Token: token})
 }
 
 func createShortURL(c *gin.Context) {
@@ -222,25 +224,15 @@ func createShortURL(c *gin.Context) {
 		return
 	}
 
-	scheme := "http"
-	if c.Request.URL.Scheme != "" {
-		scheme = c.Request.URL.Scheme
-	}
+	shortURL := getShortURL(c, url.HashURL)
 
-	shortURL := scheme + "://" + c.Request.Host + "/" + url.HashURL
-
-	resp := ShortUrlCreated{
-		ShortURL: shortURL,
-	}
-
-	c.JSON(http.StatusCreated, resp)
+	c.JSON(http.StatusCreated, ShortUrlCreated{ShortURL: shortURL})
 }
 
 func redirectToOriginalURL(c *gin.Context) {
 	hashURL := c.Param("hashURL")
 
-	var originalURL string
-	err := db.QueryRow("SELECT original_url FROM urls WHERE hash_url = ?", hashURL).Scan(&originalURL)
+	originalURL, err := getOriginalURLByHash(hashURL)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Short URL not found"})
 		return
@@ -278,17 +270,11 @@ func getUserIDFromToken(c *gin.Context) (uuid.UUID, error) {
 	_, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return jwtKey, nil
 	})
-
 	if err != nil {
 		return uuid.Nil, err
 	}
 
-	userID, err := uuid.Parse(claims.Subject)
-	if err != nil {
-		return uuid.Nil, err
-	}
-
-	return userID, nil
+	return uuid.Parse(claims.Subject)
 }
 
 func isUsernameTaken(username string) bool {
@@ -328,6 +314,23 @@ func generateRandomString(length int) (string, error) {
 	return string(result), nil
 }
 
+func getShortURL(c *gin.Context, hashURL string) string {
+	scheme := "http"
+	if c.Request.URL.Scheme != "" {
+		scheme = c.Request.URL.Scheme
+	}
+	return scheme + "://" + c.Request.Host + "/" + hashURL
+}
+
+func getOriginalURLByHash(hashURL string) (string, error) {
+	var originalURL string
+	err := db.QueryRow("SELECT original_url FROM urls WHERE hash_url = ?", hashURL).Scan(&originalURL)
+	if err != nil {
+		return "", err
+	}
+	return originalURL, nil
+}
+
 func authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString := c.GetHeader("Authorization")
@@ -338,7 +341,6 @@ func authMiddleware() gin.HandlerFunc {
 		}
 
 		claims := &Claims{}
-
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 			return jwtKey, nil
 		})
