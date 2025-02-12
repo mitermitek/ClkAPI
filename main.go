@@ -25,22 +25,22 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-type SignUpRequestDTO struct {
+type UserRegistrationDTO struct {
 	Username string `json:"username" binding:"required,min=3,max=20"`
 	Password string `json:"password" binding:"required"`
 }
 
-type SignUpResponseDTO struct {
+type UserRegisteredDTO struct {
 	ID       uuid.UUID `json:"id"`
 	Username string    `json:"username"`
 }
 
-type SignInRequestDTO struct {
+type UserLoginDTO struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
 
-type SignInResponseDTO struct {
+type UserLoggedInDTO struct {
 	Token string `json:"token"`
 }
 
@@ -91,7 +91,7 @@ func main() {
 }
 
 func signup(c *gin.Context) {
-	var req SignUpRequestDTO
+	var req UserRegistrationDTO
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -125,7 +125,7 @@ func signup(c *gin.Context) {
 		return
 	}
 
-	resp := SignUpResponseDTO{
+	resp := UserRegisteredDTO{
 		ID:       user.ID,
 		Username: user.Username,
 	}
@@ -134,7 +134,7 @@ func signup(c *gin.Context) {
 }
 
 func signin(c *gin.Context) {
-	var req SignInRequestDTO
+	var req UserLoginDTO
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -152,7 +152,7 @@ func signin(c *gin.Context) {
 		return
 	}
 
-	resp := SignInResponseDTO{
+	resp := UserLoggedInDTO{
 		Token: token,
 	}
 
