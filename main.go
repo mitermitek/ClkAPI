@@ -76,6 +76,10 @@ func main() {
 
 	r := gin.Default()
 
+	r.GET("/robots.txt", func(c *gin.Context) {
+        c.File("robots.txt")
+    })
+
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "hello"})
 	})
