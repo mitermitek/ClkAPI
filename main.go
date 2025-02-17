@@ -53,11 +53,11 @@ type UserLoggedInDTO struct {
 	Token string `json:"token"`
 }
 
-type ShortUrlCreation struct {
+type ShortUrlCreationDTO struct {
 	OriginalURL string `json:"original_url" binding:"required,min=10,max=2048"`
 }
 
-type ShortUrlCreated struct {
+type ShortUrlCreatedDTO struct {
 	ShortURL string `json:"short_url"`
 }
 
@@ -204,7 +204,7 @@ func signin(c *gin.Context) {
 }
 
 func createShortURL(c *gin.Context) {
-	var req ShortUrlCreation
+	var req ShortUrlCreationDTO
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -242,7 +242,7 @@ func createShortURL(c *gin.Context) {
 
 	shortURL := getShortURL(c, url.HashURL)
 
-	c.JSON(http.StatusCreated, ShortUrlCreated{ShortURL: shortURL})
+	c.JSON(http.StatusCreated, ShortUrlCreatedDTO{ShortURL: shortURL})
 }
 
 func redirectToOriginalURL(c *gin.Context) {
